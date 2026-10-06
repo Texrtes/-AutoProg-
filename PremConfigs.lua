@@ -17,10 +17,10 @@ local Config = {
                 TowerToBuy = { "Assassin" },
                 StoryMode = { "Boot Camp", "Live Fire", "Breach Protocol", "Brute Force" }, -- Story Missions
                 scripts = {
-                    ["Boot Camp"] = "https://raw.githubusercontent.com/Atxvy/Main/refs/heads/main/...",
-                    ["Live Fire"] = "https://raw.githubusercontent.com/Atxvy/Main/refs/heads/main/...",
-                    ["Breach Protocol"] = "https://raw.githubusercontent.com/Atxvy/Main/refs/heads/main/...",
-                    ["Brute Force"] = "https://raw.githubusercontent.com/Atxvy/Main/refs/heads/main/...",
+                    ["Boot Camp"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node0/Bootcamp.lua",
+                    ["Live Fire"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node0/LiveFire.lua",
+                    ["Breach Protocol"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node0/BreachProtocol.lua",
+                    ["Brute Force"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node0/BruteForce.lua",
                 }
             }
         },
@@ -30,13 +30,17 @@ local Config = {
             [1] = {
                 Level = 0, -- Level required: 0 or above
                 LevelGoals = 15,
-                TowersCheck = { "Scout", "Sniper" },
-                TowersToEquip = { "Scout", "Sniper", "Assassin" },
-                Modes = "Intermidiete", -- Match difficulty / mode
-                TowerToBuy = { "Commander" }, -- Node 1 things to do: Grind coins until Soldier is purchased
-                Maps = { "Simplicity", "Four Paths", "Grass Isle" }, -- Available Maps
+                TowersCheck = { "Scout" },
+                TowersToEquip = { "Scout" },
+                Modes = "Easy", -- Match difficulty / mode
+                TowerToBuy = { "Soldier" }, -- Node 1 things to do: Grind coins until Soldier is purchased
+                Maps = { "Simplicity", "Meltdown", "Midnight Issue", "Spring Fever", "Stained Temple" }, -- Available Maps
                 scripts = {
-                    ["Simplicity"] = "https://raw.githubusercontent.com/Vtzey/AutoProg/main/Strats/Inter/Simplicity.lua",
+                    ["Simplicity"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node1/simplicity.lua",
+                    ["Meltdown"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node1/meltdown.lua",
+                    ["Midnight Issue"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node1/midnight_issue.lua",
+                    ["Spring Fever"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node1/spring_fever.lua",
+                    ["Stained Temple"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node1/stained_temple.lua",
                 }
             }
         },
@@ -47,9 +51,13 @@ local Config = {
 				LevelGoals = 50,
                 TowersCheck = { "Scout", "Sniper", "Assassin", "Soldier" },
                 TowersToEquip = { "Scout", "Sniper", "Assassin", "Soldier" },
-                Maps = { "Simplicity", "Cyber City", "Nether" }, -- Available Maps
+                Maps = { "Simplicity", "Meltdown", "Midnight Issue", "Spring Fever", "Stained Temple" }, -- Available Maps
                 scripts = {
-                    ["Simplicity"] = "https://raw.githubusercontent.com/Vtzey/AutoProg/main/Strats/Inter/Simplicity.lua",
+                    ["Simplicity"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node1/simplicity.lua",
+                    ["Meltdown"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node1/meltdown.lua",
+                    ["Midnight Issue"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node1/midnight_issue.lua",
+                    ["Spring Fever"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node1/spring_fever.lua",
+                    ["Stained Temple"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node1/stained_temple.lua",
                 }
             }
         }
