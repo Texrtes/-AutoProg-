@@ -65,6 +65,17 @@ local StoryModeClient = nil
 local StoryModeData = nil
 local StoryModeSerialization = nil
 
+-- Persistent memory caches to guarantee live data continuity across teleports and frame transitions
+local lastKnownLevel = nil
+local lastKnownCoins = nil
+local lastKnownGems = nil
+local lastKnownExp = nil
+local lastKnownChapter0Beaten = nil
+local ownedTowersCache = {
+    ["scout"] = true,
+    ["sniper"] = true,
+}
+
 pcall(function()
     Cache = require(ReplicatedStorage.Client.Modules.Cache)
 end)
@@ -100,6 +111,30 @@ pcall(function()
 end)
 
 -- Lazy-require helpers to ensure modules are fetched even if loaded asynchronously
+local function getCache()
+    if not Cache then
+        pcall(function()
+            local cm = ReplicatedStorage:FindFirstChild("Client")
+            local mod = cm and cm:FindFirstChild("Modules") and cm.Modules:FindFirstChild("Cache")
+            if mod then
+                Cache = require(mod)
+            elseif ReplicatedStorage:FindFirstChild("Client") then
+                Cache = require(ReplicatedStorage.Client.Modules.Cache)
+            end
+        end)
+    end
+    return Cache
+end
+
+local function getInventoryController()
+    if not InventoryController then
+        pcall(function()
+            InventoryController = require(ReplicatedStorage.Client.Interfaces.LegacyInterface.Controllers.InventoryController)
+        end)
+    end
+    return InventoryController
+end
+
 local function getPlayerStatsStore()
     if not PlayerStatsStore then
         pcall(function()
@@ -138,10 +173,11 @@ end
 
 -- Helper to safely get value synchronously without yielding or dropping thread capability
 local function getStat(name)
-    if Cache and (type(Cache) == "table" or type(Cache) == "function") then
+    local curCache = getCache()
+    if curCache and (type(curCache) == "table" or type(curCache) == "function") then
         -- 1. Direct atom lookup
         local ok, val = pcall(function()
-            local atom = Cache(name)
+            local atom = curCache(name)
             if atom and type(atom.GetValue) == "function" then
                 local fastVal = atom:GetValue()
                 if fastVal ~= nil then
@@ -159,7 +195,7 @@ local function getStat(name)
             local parentKey, childKey = string.match(name, "^([^%.]+)%.(.+)$")
             if parentKey and childKey then
                 local okParent, parentVal = pcall(function()
-                    local parentAtom = Cache(parentKey)
+                    local parentAtom = curCache(parentKey)
                     if parentAtom and type(parentAtom.GetValue) == "function" then
                         return parentAtom:GetValue()
                     end
@@ -249,35 +285,115 @@ end
 
 function CombinedData:IsTowerOwned(towerName)
     if not towerName or towerName == "" then return false end
+    local cleanName = tostring(towerName):gsub("^%s*(.-)%s*$", "%1")
+    local norm = string.lower(cleanName):gsub("%s+", "")
+    if norm == "assasin" then norm = "assassin" end
+    if norm == "scout" or norm == "sniper" then return true end
 
-    -- 1. Fast Cache Check
-    local troops = getCacheValue("Inventory.Troops")
-    if troops and type(troops) == "table" then
-        if troops[towerName] ~= nil then
-            return true
-        end
+    -- Check persistent memory cache first
+    if ownedTowersCache[norm] then
+        return true
     end
 
-    -- 2. InventoryController Check
-    if InventoryController and type(InventoryController.getItems) == "function" then
-        local success, items = pcall(function() return InventoryController:getItems() end)
-        if success and items then
-            for _, item in pairs(items) do
-                if type(item) == "table" and item.type == "tower" and item.name == towerName then
+    -- 1. Fast Cache Check: Inventory.Troops and Inventory tables
+    local curCache = getCache()
+    if curCache then
+        local troops = nil
+        pcall(function()
+            local atom = curCache("Inventory.Troops")
+            if atom and type(atom.GetValue) == "function" then
+                troops = atom:GetValue()
+            end
+        end)
+        if not troops then
+            troops = getCacheValue("Inventory.Troops")
+        end
+        if troops and type(troops) == "table" then
+            if troops[cleanName] ~= nil or troops[towerName] ~= nil then
+                ownedTowersCache[norm] = true
+                return true
+            end
+            for k, _ in pairs(troops) do
+                local kNorm = string.lower(tostring(k)):gsub("%s+", "")
+                if kNorm == "assasin" then kNorm = "assassin" end
+                if kNorm == norm then
+                    ownedTowersCache[norm] = true
+                    return true
+                end
+            end
+        end
+
+        local inv = nil
+        pcall(function()
+            local atom = curCache("Inventory")
+            if atom and type(atom.GetValue) == "function" then
+                inv = atom:GetValue()
+            end
+        end)
+        if inv and type(inv) == "table" and type(inv.Troops) == "table" then
+            if inv.Troops[cleanName] ~= nil or inv.Troops[towerName] ~= nil then
+                ownedTowersCache[norm] = true
+                return true
+            end
+            for k, _ in pairs(inv.Troops) do
+                local kNorm = string.lower(tostring(k)):gsub("%s+", "")
+                if kNorm == "assasin" then kNorm = "assassin" end
+                if kNorm == norm then
+                    ownedTowersCache[norm] = true
                     return true
                 end
             end
         end
     end
 
-    -- 3. UI Scrolling Container Fallback
+    -- 2. StateReplicators.PlayerReplicator (EquippedTowers attribute in-match)
+    pcall(function()
+        local reps = ReplicatedStorage:FindFirstChild("StateReplicators")
+        if reps then
+            local lp = getLocalPlayer()
+            local myId = lp and lp.UserId
+            for _, r in ipairs(reps:GetChildren()) do
+                if r.Name == "PlayerReplicator" and (not myId or r:GetAttribute("UserId") == myId) then
+                    local eq = r:GetAttribute("EquippedTowers")
+                    if eq and type(eq) == "string" then
+                        local eqClean = string.lower(eq):gsub("%s+", "")
+                        if eqClean:find(norm) then
+                            ownedTowersCache[norm] = true
+                        end
+                    end
+                end
+            end
+        end
+    end)
+    if ownedTowersCache[norm] then return true end
+
+    -- 3. InventoryController Check (Lobby)
+    local invCtrl = getInventoryController()
+    if invCtrl and type(invCtrl.getItems) == "function" then
+        local success, items = pcall(function() return invCtrl:getItems() end)
+        if success and items then
+            for _, item in pairs(items) do
+                if type(item) == "table" and item.type == "tower" and item.name then
+                    local itemNorm = string.lower(tostring(item.name)):gsub("%s+", "")
+                    if itemNorm == "assasin" then itemNorm = "assassin" end
+                    if itemNorm == norm then
+                        ownedTowersCache[norm] = true
+                        return true
+                    end
+                end
+            end
+        end
+    end
+
+    -- 4. UI Scrolling Container Fallback (Lobby)
     for i = 1, 7 do
         local container = getScrollingContainer(i)
         if container then
-            local towerNode = container:FindFirstChild(towerName)
+            local towerNode = container:FindFirstChild(cleanName) or container:FindFirstChild(towerName)
             if towerNode then
                 local main = towerNode:FindFirstChild("main")
                 if main and main:FindFirstChild("amountLeft") then
+                    ownedTowersCache[norm] = true
                     return true
                 end
             end
@@ -643,162 +759,352 @@ local function getLobbyHud()
 end
 
 function CombinedData:GetLevel()
+    local lvl = nil
+
     -- 1. Check PlayerStatsStore (Official Client Store: getLevel())
     local store = getPlayerStatsStore()
     if store and type(store.getLevel) == "function" then
-        local ok, lvl = pcall(store.getLevel)
-        if ok and lvl ~= nil and tonumber(lvl) and tonumber(lvl) > 0 then
-            return tonumber(lvl), tostring(lvl)
+        local ok, val = pcall(store.getLevel)
+        if ok and val ~= nil and tonumber(val) and tonumber(val) > 0 then
+            lvl = tonumber(val)
         end
     end
 
     -- 2. Check PlayerController (LegacyInterface Controller: getLevel())
-    local ctrl = getPlayerController()
-    if ctrl and type(ctrl.getLevel) == "function" then
-        local ok, lvl = pcall(function() return ctrl:getLevel() end)
-        if ok and lvl ~= nil and tonumber(lvl) and tonumber(lvl) > 0 then
-            return tonumber(lvl), tostring(lvl)
-        end
-    end
-
-    -- 3. Direct Cache lookup (Values.Level)
-    local lvl = getStat("Values.Level")
-    if lvl ~= nil and tonumber(lvl) and tonumber(lvl) > 0 then
-        return tonumber(lvl), tostring(lvl)
-    end
-
-    -- 4. Fallback: Lobby HUD TextLabel
-    local hud = getLobbyHud()
-    if hud then
-        local curLvl = hud:FindFirstChild("currentLevel", true)
-            or (hud:FindFirstChild("Frame", true) and hud.Frame:FindFirstChild("centerElements", true) and hud.Frame.centerElements:FindFirstChild("level", true) and hud.Frame.centerElements.level:FindFirstChild("content", true) and hud.Frame.centerElements.level.content:FindFirstChild("currentLevel", true))
-
-        if curLvl and curLvl:IsA("TextLabel") then
-            local txt = curLvl.Text
-            local num = parseNumber(txt)
-            if num and num > 0 then
-                return num, txt
+    if not lvl then
+        local ctrl = getPlayerController()
+        if ctrl and type(ctrl.getLevel) == "function" then
+            local ok, val = pcall(function() return ctrl:getLevel() end)
+            if ok and val ~= nil and tonumber(val) and tonumber(val) > 0 then
+                lvl = tonumber(val)
             end
         end
     end
 
-    -- 5. Fallback: LocalPlayer ValueBase
-    local lp = getLocalPlayer()
-    if lp then
-        local val = lp:FindFirstChild("Level")
-        if val and val:IsA("ValueBase") then
-            local v = val.Value
-            local num = tonumber(v) or parseNumber(v)
-            if num and num > 0 then
-                return num, tostring(v)
+    -- 3. Direct Cache lookup (Values.Level or Values table atom)
+    if not lvl then
+        local val = getStat("Values.Level")
+        if val ~= nil and tonumber(val) and tonumber(val) > 0 then
+            lvl = tonumber(val)
+        else
+            local curCache = getCache()
+            if curCache then
+                pcall(function()
+                    local vAtom = curCache("Values")
+                    if vAtom and type(vAtom.GetValue) == "function" then
+                        local vTable = vAtom:GetValue()
+                        if vTable and vTable.Level ~= nil and tonumber(vTable.Level) and tonumber(vTable.Level) > 0 then
+                            lvl = tonumber(vTable.Level)
+                        end
+                    end
+                end)
             end
         end
+    end
+
+    -- 4. Fallback: LocalPlayer ValueBase (Level)
+    if not lvl then
+        local lp = getLocalPlayer()
+        if lp then
+            local val = lp:FindFirstChild("Level")
+            if val and val:IsA("ValueBase") then
+                local num = tonumber(val.Value) or parseNumber(val.Value)
+                if num and num > 0 then
+                    lvl = num
+                end
+            end
+        end
+    end
+
+    -- 5. Fallback: LocalPlayer leaderstats
+    if not lvl then
+        local lp = getLocalPlayer()
+        local ls = lp and lp:FindFirstChild("leaderstats")
+        if ls then
+            local val = ls:FindFirstChild("Level")
+            if val and val:IsA("ValueBase") then
+                local num = tonumber(val.Value) or parseNumber(val.Value)
+                if num and num > 0 then
+                    lvl = num
+                end
+            end
+        end
+    end
+
+    -- 6. Fallback: StateReplicators PlayerReplicator attribute
+    if not lvl then
+        pcall(function()
+            local reps = ReplicatedStorage:FindFirstChild("StateReplicators")
+            if reps then
+                local lp = getLocalPlayer()
+                local myId = lp and lp.UserId
+                for _, r in ipairs(reps:GetChildren()) do
+                    if r.Name == "PlayerReplicator" and (not myId or r:GetAttribute("UserId") == myId) then
+                        local attrLvl = r:GetAttribute("Level")
+                        if attrLvl and tonumber(attrLvl) and tonumber(attrLvl) > 0 then
+                            lvl = tonumber(attrLvl)
+                            break
+                        end
+                    end
+                end
+            end
+        end)
+    end
+
+    -- 7. Fallback: Lobby HUD TextLabel
+    if not lvl then
+        local hud = getLobbyHud()
+        if hud then
+            local curLvl = hud:FindFirstChild("currentLevel", true)
+                or (hud:FindFirstChild("Frame", true) and hud.Frame:FindFirstChild("centerElements", true) and hud.Frame.centerElements:FindFirstChild("level", true) and hud.Frame.centerElements.level:FindFirstChild("content", true) and hud.Frame.centerElements.level.content:FindFirstChild("currentLevel", true))
+
+            if curLvl and curLvl:IsA("TextLabel") then
+                local txt = curLvl.Text
+                local num = parseNumber(txt)
+                if num and num > 0 then
+                    lvl = num
+                end
+            end
+        end
+    end
+
+    if lvl and lvl > 0 then
+        lastKnownLevel = lvl
+        return lvl, tostring(lvl)
+    end
+
+    if lastKnownLevel and lastKnownLevel > 0 then
+        return lastKnownLevel, tostring(lastKnownLevel)
     end
 
     return 0, "0"
 end
 
 function CombinedData:GetCoins()
+    local coins = nil
+
     -- 1. Check PlayerStatsStore (getCoins())
     local store = getPlayerStatsStore()
     if store and type(store.getCoins) == "function" then
-        local ok, coins = pcall(store.getCoins)
-        if ok and coins ~= nil and tonumber(coins) then
-            return tonumber(coins), tostring(coins)
+        local ok, val = pcall(store.getCoins)
+        if ok and val ~= nil and tonumber(val) then
+            coins = tonumber(val)
         end
     end
 
     -- 2. Check PlayerController (getCoins())
-    local ctrl = getPlayerController()
-    if ctrl and type(ctrl.getCoins) == "function" then
-        local ok, coins = pcall(function() return ctrl:getCoins() end)
-        if ok and coins ~= nil and tonumber(coins) then
-            return tonumber(coins), tostring(coins)
+    if not coins then
+        local ctrl = getPlayerController()
+        if ctrl and type(ctrl.getCoins) == "function" then
+            local ok, val = pcall(function() return ctrl:getCoins() end)
+            if ok and val ~= nil and tonumber(val) then
+                coins = tonumber(val)
+            end
         end
     end
 
-    -- 3. Direct Cache lookup (Values.Coins)
-    local coins = getStat("Values.Coins")
-    if coins ~= nil and tonumber(coins) then
-        return tonumber(coins), tostring(coins)
+    -- 3. Direct Cache lookup (Values.Coins or Values table atom)
+    if not coins then
+        local val = getStat("Values.Coins")
+        if val ~= nil and tonumber(val) then
+            coins = tonumber(val)
+        else
+            local curCache = getCache()
+            if curCache then
+                pcall(function()
+                    local vAtom = curCache("Values")
+                    if vAtom and type(vAtom.GetValue) == "function" then
+                        local vTable = vAtom:GetValue()
+                        if vTable and vTable.Coins ~= nil and tonumber(vTable.Coins) then
+                            coins = tonumber(vTable.Coins)
+                        end
+                    end
+                end)
+            end
+        end
     end
 
-    -- 4. Fallback: Lobby HUD TextLabel
-    local hud = getLobbyHud()
-    if hud then
-        local path = {"Frame", "leftElements", "currencies", "coins", "content", "currency", "currencyValue"}
-        local node = hud
-        for _, child in ipairs(path) do
-            node = node:FindFirstChild(child, true) or (node and node:FindFirstChild(child))
-            if not node then break end
-        end
-        if node and node:IsA("TextLabel") then
-            local txt = node.Text
-            return parseNumber(txt), txt
+    -- 4. Fallback: LocalPlayer ValueBase (Coins or Gold or Cash)
+    if not coins then
+        local lp = getLocalPlayer()
+        if lp then
+            local val = lp:FindFirstChild("Coins") or lp:FindFirstChild("Gold")
+            if val and val:IsA("ValueBase") then
+                coins = tonumber(val.Value) or parseNumber(val.Value)
+            end
         end
     end
 
-    -- 5. Fallback: LocalPlayer ValueBase
-    local lp = getLocalPlayer()
-    if lp then
-        local val = lp:FindFirstChild("Coins") or lp:FindFirstChild("Gold")
-        if val and val:IsA("ValueBase") then
-            local v = val.Value
-            return tonumber(v) or parseNumber(v), tostring(v)
+    -- 5. Fallback: LocalPlayer leaderstats
+    if not coins then
+        local lp = getLocalPlayer()
+        local ls = lp and lp:FindFirstChild("leaderstats")
+        if ls then
+            local val = ls:FindFirstChild("Coins") or ls:FindFirstChild("Gold") or ls:FindFirstChild("Cash")
+            if val and val:IsA("ValueBase") then
+                coins = tonumber(val.Value) or parseNumber(val.Value)
+            end
         end
+    end
+
+    -- 6. Fallback: StateReplicators PlayerReplicator attribute
+    if not coins then
+        pcall(function()
+            local reps = ReplicatedStorage:FindFirstChild("StateReplicators")
+            if reps then
+                local lp = getLocalPlayer()
+                local myId = lp and lp.UserId
+                for _, r in ipairs(reps:GetChildren()) do
+                    if r.Name == "PlayerReplicator" and (not myId or r:GetAttribute("UserId") == myId) then
+                        local attrCoins = r:GetAttribute("Coins")
+                        if attrCoins and tonumber(attrCoins) then
+                            coins = tonumber(attrCoins)
+                            break
+                        end
+                    end
+                end
+            end
+        end)
+    end
+
+    -- 7. Fallback: Lobby HUD TextLabel
+    if not coins then
+        local hud = getLobbyHud()
+        if hud then
+            local path = {"Frame", "leftElements", "currencies", "coins", "content", "currency", "currencyValue"}
+            local node = hud
+            for _, child in ipairs(path) do
+                node = node:FindFirstChild(child, true) or (node and node:FindFirstChild(child))
+                if not node then break end
+            end
+            if node and node:IsA("TextLabel") then
+                coins = parseNumber(node.Text)
+            end
+        end
+    end
+
+    if coins and coins >= 0 then
+        lastKnownCoins = coins
+        return coins, tostring(coins)
+    end
+
+    if lastKnownCoins and lastKnownCoins >= 0 then
+        return lastKnownCoins, tostring(lastKnownCoins)
     end
 
     return 0, "0"
 end
 
 function CombinedData:GetGems()
+    local gems = nil
+
     -- 1. Check PlayerStatsStore (getGems())
     local store = getPlayerStatsStore()
     if store and type(store.getGems) == "function" then
-        local ok, gems = pcall(store.getGems)
-        if ok and gems ~= nil and tonumber(gems) then
-            return tonumber(gems), tostring(gems)
+        local ok, val = pcall(store.getGems)
+        if ok and val ~= nil and tonumber(val) then
+            gems = tonumber(val)
         end
     end
 
     -- 2. Check PlayerController (getGems())
-    local ctrl = getPlayerController()
-    if ctrl and type(ctrl.getGems) == "function" then
-        local ok, gems = pcall(function() return ctrl:getGems() end)
-        if ok and gems ~= nil and tonumber(gems) then
-            return tonumber(gems), tostring(gems)
+    if not gems then
+        local ctrl = getPlayerController()
+        if ctrl and type(ctrl.getGems) == "function" then
+            local ok, val = pcall(function() return ctrl:getGems() end)
+            if ok and val ~= nil and tonumber(val) then
+                gems = tonumber(val)
+            end
         end
     end
 
-    -- 3. Direct Cache lookup (Values.Gems)
-    local gems = getStat("Values.Gems")
-    if gems ~= nil and tonumber(gems) then
-        return tonumber(gems), tostring(gems)
+    -- 3. Direct Cache lookup (Values.Gems or Values table atom)
+    if not gems then
+        local val = getStat("Values.Gems")
+        if val ~= nil and tonumber(val) then
+            gems = tonumber(val)
+        else
+            local curCache = getCache()
+            if curCache then
+                pcall(function()
+                    local vAtom = curCache("Values")
+                    if vAtom and type(vAtom.GetValue) == "function" then
+                        local vTable = vAtom:GetValue()
+                        if vTable and vTable.Gems ~= nil and tonumber(vTable.Gems) then
+                            gems = tonumber(vTable.Gems)
+                        end
+                    end
+                end)
+            end
+        end
     end
 
-    -- 4. Fallback: Lobby HUD TextLabel
-    local hud = getLobbyHud()
-    if hud then
-        local path = {"Frame", "leftElements", "currencies", "gems", "content", "currency", "currencyValue"}
-        local node = hud
-        for _, child in ipairs(path) do
-            node = node:FindFirstChild(child, true) or (node and node:FindFirstChild(child))
-            if not node then break end
-        end
-        if node and node:IsA("TextLabel") then
-            local txt = node.Text
-            return parseNumber(txt), txt
+    -- 4. Fallback: LocalPlayer ValueBase
+    if not gems then
+        local lp = getLocalPlayer()
+        if lp then
+            local val = lp:FindFirstChild("Gems") or lp:FindFirstChild("Diamonds")
+            if val and val:IsA("ValueBase") then
+                gems = tonumber(val.Value) or parseNumber(val.Value)
+            end
         end
     end
 
-    -- 5. Fallback: LocalPlayer ValueBase
-    local lp = getLocalPlayer()
-    if lp then
-        local val = lp:FindFirstChild("Gems") or lp:FindFirstChild("Diamonds")
-        if val and val:IsA("ValueBase") then
-            local v = val.Value
-            return tonumber(v) or parseNumber(v), tostring(v)
+    -- 5. Fallback: LocalPlayer leaderstats
+    if not gems then
+        local lp = getLocalPlayer()
+        local ls = lp and lp:FindFirstChild("leaderstats")
+        if ls then
+            local val = ls:FindFirstChild("Gems") or ls:FindFirstChild("Diamonds")
+            if val and val:IsA("ValueBase") then
+                gems = tonumber(val.Value) or parseNumber(val.Value)
+            end
         end
+    end
+
+    -- 6. Fallback: StateReplicators PlayerReplicator attribute
+    if not gems then
+        pcall(function()
+            local reps = ReplicatedStorage:FindFirstChild("StateReplicators")
+            if reps then
+                local lp = getLocalPlayer()
+                local myId = lp and lp.UserId
+                for _, r in ipairs(reps:GetChildren()) do
+                    if r.Name == "PlayerReplicator" and (not myId or r:GetAttribute("UserId") == myId) then
+                        local attrGems = r:GetAttribute("Gems")
+                        if attrGems and tonumber(attrGems) then
+                            gems = tonumber(attrGems)
+                            break
+                        end
+                    end
+                end
+            end
+        end)
+    end
+
+    -- 7. Fallback: Lobby HUD TextLabel
+    if not gems then
+        local hud = getLobbyHud()
+        if hud then
+            local path = {"Frame", "leftElements", "currencies", "gems", "content", "currency", "currencyValue"}
+            local node = hud
+            for _, child in ipairs(path) do
+                node = node:FindFirstChild(child, true) or (node and node:FindFirstChild(child))
+                if not node then break end
+            end
+            if node and node:IsA("TextLabel") then
+                gems = parseNumber(node.Text)
+            end
+        end
+    end
+
+    if gems and gems >= 0 then
+        lastKnownGems = gems
+        return gems, tostring(gems)
+    end
+
+    if lastKnownGems and lastKnownGems >= 0 then
+        return lastKnownGems, tostring(lastKnownGems)
     end
 
     return 0, "0"
@@ -1450,10 +1756,27 @@ function CombinedData:IsBruteForceBeaten()
 end
 
 function CombinedData:IsChapter0Beaten()
-    return self:IsBootCampBeaten() 
+    local beaten = self:IsBootCampBeaten() 
        and self:IsLiveFireBeaten() 
        and self:IsBreachProtocolBeaten() 
        and self:IsBruteForceBeaten()
+
+    if beaten then
+        lastKnownChapter0Beaten = true
+        return true
+    end
+
+    if lastKnownChapter0Beaten then
+        return true
+    end
+
+    -- If player already owns Assassin, Chapter 0 / Boot Camp is guaranteed completed
+    if self:IsTowerOwned("Assassin") then
+        lastKnownChapter0Beaten = true
+        return true
+    end
+
+    return false
 end
 
 function CombinedData:GetChapter0Status()
