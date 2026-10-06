@@ -45,19 +45,23 @@ local Config = {
             }
         },
         ["Node 2"] = {
-		LevelGoals = 50,
+            TowerToBuy = { "Farm", "Boomerang" }, -- Node 2 goal
+            TowersToClaim = { "Crook Boss" }, -- Claim Crook Boss (unlocked at Level 30)
+            LevelGoals = 50, -- Level target for Node 2
             [1] = {
-                Level = 30, -- Level required: 15 or above
-				LevelGoals = 50,
-                TowersCheck = { "Scout", "Sniper", "Assassin", "Soldier" },
-                TowersToEquip = { "Scout", "Sniper", "Assassin", "Soldier" },
-                Maps = { "Simplicity", "Meltdown", "Midnight Issue", "Spring Fever", "Stained Temple" }, -- Available Maps
+                Level = 15, -- Level required: 15 or above
+                LevelGoals = 50,
+                TowersCheck = { "Soldier" },
+                TowersToEquip = { "Soldier" },
+                Modes = "Molten", -- Match difficulty / mode
+                TowerToBuy = { "Farm", "Boomerang" },
+                TowersToClaim = { "Crook Boss" },
+                Maps = { "Lighthaos", "Midnight Issue", "Nether", "Wrecked Battlefield II" }, -- Available Maps
                 scripts = {
-                    ["Simplicity"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node1/simplicity.lua",
-                    ["Meltdown"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node1/meltdown.lua",
-                    ["Midnight Issue"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node1/midnight_issue.lua",
-                    ["Spring Fever"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node1/spring_fever.lua",
-                    ["Stained Temple"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node1/stained_temple.lua",
+                    ["Lighthaos"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node2/lighthaos.lua",
+                    ["Midnight Issue"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node2/midnight_issue.lua",
+                    ["Nether"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node2/nether.lua",
+                    ["Wrecked Battlefield II"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node2/wrecked_battlefield_ii.lua",
                 }
             }
         }
@@ -94,60 +98,67 @@ local Config = {
 	 },
 	
     -- -----------------------------------------------------------------
-    -- Tower Lists & Costs
+    -- Tower Lists & Costs (Buyable, Claimable & Unlock Requirements)
     -- -----------------------------------------------------------------
     TowerList = {
         ["Coins"] = {
-            { Name = "Scout", Cost = 0 },
-            { Name = "Sniper", Cost = 50 },
-            { Name = "Paintballer", Cost = 100 },
-            { Name = "Demoman", Cost = 200 },
-            { Name = "Boomerang", Cost = 300 },
-            { Name = "Slime Trooper", Cost = 300 },
-            { Name = "Soldier", Cost = 350 },
-            { Name = "Freezer", Cost = 650 },
-            { Name = "Militant", Cost = 800 },
-            { Name = "Assassin", Cost = 800 },
-            { Name = "Shotgunner", Cost = 850 },
-            { Name = "Hunter", Cost = 1000 },
-            { Name = "Pyromancer", Cost = 1250 },
-            { Name = "Ace Pilot", Cost = 1500 },
-            { Name = "Farm", Cost = 2000 },
-            { Name = "Medic", Cost = 2000 },
-            { Name = "Rocketeer", Cost = 2500 },
-            { Name = "Electroshocker", Cost = 2500 },
-            { Name = "Trapper", Cost = 3000 },
-            { Name = "Pulse Trooper", Cost = 3250 },
-            { Name = "Commander", Cost = 4000 },
-            { Name = "Military Base", Cost = 4000 },
-            { Name = "DJ Booth", Cost = 5000 },
-            { Name = "Tesla", Cost = 6000 },
-            { Name = "Minigunner", Cost = 8000 },
-            { Name = "Ranger", Cost = 12000 },
-            { Name = "Pursuit", Cost = 15000 },
-            { Name = "Gatling Gun", Cost = 35000 },
+            { Name = "Scout", Cost = 0, Type = "Coins", Action = "Buy" },
+            { Name = "Sniper", Cost = 50, Type = "Coins", Action = "Buy" },
+            { Name = "Paintballer", Cost = 100, Type = "Coins", Action = "Buy" },
+            { Name = "Demoman", Cost = 200, Type = "Coins", Action = "Buy" },
+            { Name = "Boomerang", Cost = 300, Type = "Coins", Action = "Buy" },
+            { Name = "Slime Trooper", Cost = 300, Type = "Coins", Action = "Buy" },
+            { Name = "Soldier", Cost = 350, Type = "Coins", Action = "Buy" },
+            { Name = "Freezer", Cost = 650, Type = "Coins", Action = "Buy" },
+            { Name = "Militant", Cost = 800, Type = "Coins", Action = "Buy" },
+            { Name = "Assassin", Cost = 800, Type = "Coins", Action = "Buy" },
+            { Name = "Shotgunner", Cost = 850, Type = "Coins", Action = "Buy" },
+            { Name = "Hunter", Cost = 1000, Type = "Coins", Action = "Buy" },
+            { Name = "Pyromancer", Cost = 1250, Type = "Coins", Action = "Buy" },
+            { Name = "Ace Pilot", Cost = 1500, Type = "Coins", Action = "Buy" },
+            { Name = "Farm", Cost = 2000, Type = "Coins", Action = "Buy" },
+            { Name = "Medic", Cost = 2000, Type = "Coins", Action = "Buy" },
+            { Name = "Rocketeer", Cost = 2500, Type = "Coins", Action = "Buy" },
+            { Name = "Electroshocker", Cost = 2500, Type = "Coins", Action = "Buy" },
+            { Name = "Trapper", Cost = 3000, Type = "Coins", Action = "Buy" },
+            { Name = "Pulse Trooper", Cost = 3250, Type = "Coins", Action = "Buy" },
+            { Name = "Commander", Cost = 4000, Type = "Coins", Action = "Buy" },
+            { Name = "Military Base", Cost = 4000, Type = "Coins", Action = "Buy" },
+            { Name = "DJ Booth", Cost = 5000, Type = "Coins", Action = "Buy" },
+            { Name = "Tesla", Cost = 6000, Type = "Coins", Action = "Buy" },
+            { Name = "Minigunner", Cost = 8000, Type = "Coins", Action = "Buy" },
+            { Name = "Ranger", Cost = 12000, Type = "Coins", Action = "Buy" },
+            { Name = "Pursuit", Cost = 15000, Type = "Coins", Action = "Buy", LevelReq = 100 },
+            { Name = "Gatling Gun", Cost = 35000, Type = "Coins", Action = "Buy", LevelReq = 175 },
+        },
+        ["Levels"] = {
+            { Name = "Crook Boss", Cost = 0, Type = "Levels", Action = "Claim", LevelReq = 30 },
+            { Name = "Turret", Cost = 0, Type = "Levels", Action = "Claim", LevelReq = 50 },
+            { Name = "Mortar", Cost = 0, Type = "Levels", Action = "Claim", LevelReq = 75 },
+            { Name = "Mercenary Base", Cost = 0, Type = "Levels", Action = "Claim", LevelReq = 150 },
+            { Name = "Mercnedary base", Cost = 0, Type = "Levels", Action = "Claim", LevelReq = 150 },
         },
         ["Gems"] = {
-            { Name = "Accelerator", Cost = 2500 },
-            { Name = "Brawler", Cost = 1250 },
-            { Name = "Necromancer", Cost = 2250 },
-            { Name = "Engineer", Cost = 4500 },
-            { Name = "Hacker", Cost = 5500 },
+            { Name = "Accelerator", Cost = 2500, Type = "Gems", Action = "Buy" },
+            { Name = "Brawler", Cost = 1250, Type = "Gems", Action = "Buy" },
+            { Name = "Necromancer", Cost = 2250, Type = "Gems", Action = "Buy" },
+            { Name = "Engineer", Cost = 4500, Type = "Gems", Action = "Buy" },
+            { Name = "Hacker", Cost = 5500, Type = "Gems", Action = "Buy" },
         },
         ["Evo"] = {
-            { Name = "EvolvedOperator", Coins = 15000, Gems = 4500 },
-            { Name = "EvolvedEnforcer", Coins = 15000, Gems = 5000 },
-            { Name = "EvolvedKingpin", Coins = 15000, Gems = 5500 },  
-            { Name = "EvolvedJuggernaut", Coins = 15000, Gems = 6000 },
+            { Name = "EvolvedOperator", Coins = 15000, Gems = 4500, Type = "Evo", Action = "Craft" },
+            { Name = "EvolvedEnforcer", Coins = 15000, Gems = 5000, Type = "Evo", Action = "Craft" },
+            { Name = "EvolvedKingpin", Coins = 15000, Gems = 5500, Type = "Evo", Action = "Craft" },  
+            { Name = "EvolvedJuggernaut", Coins = 15000, Gems = 6000, Type = "Evo", Action = "Craft" },
         },
         ["Golden"] = {
-            { Name = "Golden Scout", Cost = 50000 },
-            { Name = "Golden Demoman", Cost = 50000 },
-            { Name = "Golden Soldier", Cost = 50000 },
-            { Name = "Golden Pyromancer", Cost = 50000 },
-            { Name = "Golden Crook Boss", Cost = 50000 },
-            { Name = "Golden Minigunner", Cost = 50000 },
-            { Name = "Golden Cowboy", Cost = 50000 },
+            { Name = "Golden Scout", Cost = 50000, Type = "Golden", Action = "Buy" },
+            { Name = "Golden Demoman", Cost = 50000, Type = "Golden", Action = "Buy" },
+            { Name = "Golden Soldier", Cost = 50000, Type = "Golden", Action = "Buy" },
+            { Name = "Golden Pyromancer", Cost = 50000, Type = "Golden", Action = "Buy" },
+            { Name = "Golden Crook Boss", Cost = 50000, Type = "Golden", Action = "Buy" },
+            { Name = "Golden Minigunner", Cost = 50000, Type = "Golden", Action = "Buy" },
+            { Name = "Golden Cowboy", Cost = 50000, Type = "Golden", Action = "Buy" },
         },
     },
 
@@ -222,5 +233,8 @@ Config.SkillTreePrioUpgrade = Config.SkillTreePrioUpgrad
 Config.Nodes[0] = Config.Nodes["Node 0"]
 Config.Nodes[1] = Config.Nodes["Node 1"]
 Config.Nodes[2] = Config.Nodes["Node 2"]
+
+-- Alias for Claim towers lookup
+Config.TowerList["Claim"] = Config.TowerList["Levels"]
 
 return Config
