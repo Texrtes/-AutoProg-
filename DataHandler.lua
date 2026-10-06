@@ -66,15 +66,13 @@ local StoryModeData = nil
 local StoryModeSerialization = nil
 
 -- Persistent memory caches to guarantee live data continuity across teleports and frame transitions
-local lastKnownLevel = nil
-local lastKnownCoins = nil
-local lastKnownGems = nil
-local lastKnownExp = nil
-local lastKnownChapter0Beaten = nil
-local ownedTowersCache = {
+getgenv().AutoProg_LastKnownStats = getgenv().AutoProg_LastKnownStats or {}
+local statsEnv = getgenv().AutoProg_LastKnownStats
+local ownedTowersCache = statsEnv.OwnedTowers or {
     ["scout"] = true,
     ["sniper"] = true,
 }
+statsEnv.OwnedTowers = ownedTowersCache
 
 pcall(function()
     Cache = require(ReplicatedStorage.Client.Modules.Cache)
@@ -776,16 +774,30 @@ end
 function CombinedData:GetLevel()
     local lvl = nil
 
-    -- 1. Check PlayerStatsStore (Official Client Store: getLevel())
-    local store = getPlayerStatsStore()
-    if store and type(store.getLevel) == "function" then
-        local ok, val = pcall(store.getLevel)
-        if ok and val ~= nil and tonumber(val) and tonumber(val) > 0 then
-            lvl = tonumber(val)
+    -- 1. Direct LocalPlayer ValueBase (Level) - Always instant & live in match & lobby
+    local lp = getLocalPlayer()
+    if lp then
+        local val = lp:FindFirstChild("Level")
+        if val and val:IsA("ValueBase") then
+            local num = tonumber(val.Value) or parseNumber(val.Value)
+            if num and num > 0 then
+                lvl = num
+            end
         end
     end
 
-    -- 2. Check PlayerController (LegacyInterface Controller: getLevel())
+    -- 2. Check PlayerStatsStore (Official Client Store: getLevel())
+    if not lvl then
+        local store = getPlayerStatsStore()
+        if store and type(store.getLevel) == "function" then
+            local ok, val = pcall(store.getLevel)
+            if ok and val ~= nil and tonumber(val) and tonumber(val) > 0 then
+                lvl = tonumber(val)
+            end
+        end
+    end
+
+    -- 3. Check PlayerController (LegacyInterface Controller: getLevel())
     if not lvl then
         local ctrl = getPlayerController()
         if ctrl and type(ctrl.getLevel) == "function" then
@@ -796,7 +808,7 @@ function CombinedData:GetLevel()
         end
     end
 
-    -- 3. Direct Cache lookup (Values.Level or Values table atom)
+    -- 4. Direct Cache lookup (Values.Level or Values table atom)
     if not lvl then
         local val = getStat("Values.Level")
         if val ~= nil and tonumber(val) and tonumber(val) > 0 then
@@ -813,20 +825,6 @@ function CombinedData:GetLevel()
                         end
                     end
                 end)
-            end
-        end
-    end
-
-    -- 4. Fallback: LocalPlayer ValueBase (Level)
-    if not lvl then
-        local lp = getLocalPlayer()
-        if lp then
-            local val = lp:FindFirstChild("Level")
-            if val and val:IsA("ValueBase") then
-                local num = tonumber(val.Value) or parseNumber(val.Value)
-                if num and num > 0 then
-                    lvl = num
-                end
             end
         end
     end
@@ -884,12 +882,12 @@ function CombinedData:GetLevel()
     end
 
     if lvl and lvl > 0 then
-        lastKnownLevel = lvl
+        statsEnv.Level = lvl
         return lvl, tostring(lvl)
     end
 
-    if lastKnownLevel and lastKnownLevel > 0 then
-        return lastKnownLevel, tostring(lastKnownLevel)
+    if statsEnv.Level and statsEnv.Level > 0 then
+        return statsEnv.Level, tostring(statsEnv.Level)
     end
 
     return 0, "0"
@@ -898,16 +896,27 @@ end
 function CombinedData:GetCoins()
     local coins = nil
 
-    -- 1. Check PlayerStatsStore (getCoins())
-    local store = getPlayerStatsStore()
-    if store and type(store.getCoins) == "function" then
-        local ok, val = pcall(store.getCoins)
-        if ok and val ~= nil and tonumber(val) then
-            coins = tonumber(val)
+    -- 1. Direct LocalPlayer ValueBase (Coins or Gold or Cash) - Always instant & live in match & lobby
+    local lp = getLocalPlayer()
+    if lp then
+        local val = lp:FindFirstChild("Coins") or lp:FindFirstChild("Gold") or lp:FindFirstChild("Cash")
+        if val and val:IsA("ValueBase") then
+            coins = tonumber(val.Value) or parseNumber(val.Value)
         end
     end
 
-    -- 2. Check PlayerController (getCoins())
+    -- 2. Check PlayerStatsStore (getCoins())
+    if not coins then
+        local store = getPlayerStatsStore()
+        if store and type(store.getCoins) == "function" then
+            local ok, val = pcall(store.getCoins)
+            if ok and val ~= nil and tonumber(val) then
+                coins = tonumber(val)
+            end
+        end
+    end
+
+    -- 3. Check PlayerController (getCoins())
     if not coins then
         local ctrl = getPlayerController()
         if ctrl and type(ctrl.getCoins) == "function" then
@@ -918,7 +927,7 @@ function CombinedData:GetCoins()
         end
     end
 
-    -- 3. Direct Cache lookup (Values.Coins or Values table atom)
+    -- 4. Direct Cache lookup (Values.Coins or Values table atom)
     if not coins then
         local val = getStat("Values.Coins")
         if val ~= nil and tonumber(val) then
@@ -935,17 +944,6 @@ function CombinedData:GetCoins()
                         end
                     end
                 end)
-            end
-        end
-    end
-
-    -- 4. Fallback: LocalPlayer ValueBase (Coins or Gold or Cash)
-    if not coins then
-        local lp = getLocalPlayer()
-        if lp then
-            local val = lp:FindFirstChild("Coins") or lp:FindFirstChild("Gold")
-            if val and val:IsA("ValueBase") then
-                coins = tonumber(val.Value) or parseNumber(val.Value)
             end
         end
     end
@@ -999,12 +997,12 @@ function CombinedData:GetCoins()
     end
 
     if coins and coins >= 0 then
-        lastKnownCoins = coins
+        statsEnv.Coins = coins
         return coins, tostring(coins)
     end
 
-    if lastKnownCoins and lastKnownCoins >= 0 then
-        return lastKnownCoins, tostring(lastKnownCoins)
+    if statsEnv.Coins and statsEnv.Coins >= 0 then
+        return statsEnv.Coins, tostring(statsEnv.Coins)
     end
 
     return 0, "0"
@@ -1013,16 +1011,27 @@ end
 function CombinedData:GetGems()
     local gems = nil
 
-    -- 1. Check PlayerStatsStore (getGems())
-    local store = getPlayerStatsStore()
-    if store and type(store.getGems) == "function" then
-        local ok, val = pcall(store.getGems)
-        if ok and val ~= nil and tonumber(val) then
-            gems = tonumber(val)
+    -- 1. Direct LocalPlayer ValueBase (Gems or Diamonds) - Always instant & live in match & lobby
+    local lp = getLocalPlayer()
+    if lp then
+        local val = lp:FindFirstChild("Gems") or lp:FindFirstChild("Diamonds")
+        if val and val:IsA("ValueBase") then
+            gems = tonumber(val.Value) or parseNumber(val.Value)
         end
     end
 
-    -- 2. Check PlayerController (getGems())
+    -- 2. Check PlayerStatsStore (getGems())
+    if not gems then
+        local store = getPlayerStatsStore()
+        if store and type(store.getGems) == "function" then
+            local ok, val = pcall(store.getGems)
+            if ok and val ~= nil and tonumber(val) then
+                gems = tonumber(val)
+            end
+        end
+    end
+
+    -- 3. Check PlayerController (getGems())
     if not gems then
         local ctrl = getPlayerController()
         if ctrl and type(ctrl.getGems) == "function" then
@@ -1033,7 +1042,7 @@ function CombinedData:GetGems()
         end
     end
 
-    -- 3. Direct Cache lookup (Values.Gems or Values table atom)
+    -- 4. Direct Cache lookup (Values.Gems or Values table atom)
     if not gems then
         local val = getStat("Values.Gems")
         if val ~= nil and tonumber(val) then
@@ -1050,17 +1059,6 @@ function CombinedData:GetGems()
                         end
                     end
                 end)
-            end
-        end
-    end
-
-    -- 4. Fallback: LocalPlayer ValueBase
-    if not gems then
-        local lp = getLocalPlayer()
-        if lp then
-            local val = lp:FindFirstChild("Gems") or lp:FindFirstChild("Diamonds")
-            if val and val:IsA("ValueBase") then
-                gems = tonumber(val.Value) or parseNumber(val.Value)
             end
         end
     end
@@ -1114,12 +1112,12 @@ function CombinedData:GetGems()
     end
 
     if gems and gems >= 0 then
-        lastKnownGems = gems
+        statsEnv.Gems = gems
         return gems, tostring(gems)
     end
 
-    if lastKnownGems and lastKnownGems >= 0 then
-        return lastKnownGems, tostring(lastKnownGems)
+    if statsEnv.Gems and statsEnv.Gems >= 0 then
+        return statsEnv.Gems, tostring(statsEnv.Gems)
     end
 
     return 0, "0"
@@ -1194,24 +1192,38 @@ function CombinedData:GetPlayerExp()
     local level = self:GetLevel() or 0
     local exp = nil
 
-    -- 1. Check PlayerStatsStore (Official Client Store: getExperience())
-    local store = getPlayerStatsStore()
-    if store then
-        if type(store.getExperience) == "function" then
-            local ok, val = pcall(store.getExperience)
-            if ok and val ~= nil and tonumber(val) then
-                exp = tonumber(val)
-            end
-        end
-        if exp == nil and type(store.getState) == "function" then
-            local ok, state = pcall(store.getState)
-            if ok and type(state) == "table" and state.experience ~= nil and tonumber(state.experience) then
-                exp = tonumber(state.experience)
+    -- 1. Direct LocalPlayer ValueBase (Experience or Exp) - Always instant & live in match & lobby
+    local lp = getLocalPlayer()
+    if lp then
+        local val = lp:FindFirstChild("Experience") or lp:FindFirstChild("Exp")
+        if val and val:IsA("ValueBase") then
+            local v = val.Value
+            if v ~= nil then
+                exp = tonumber(v) or parseNumber(v)
             end
         end
     end
 
-    -- 2. Check PlayerController (LegacyInterface Controller: getExperience())
+    -- 2. Check PlayerStatsStore (Official Client Store: getExperience())
+    if exp == nil then
+        local store = getPlayerStatsStore()
+        if store then
+            if type(store.getExperience) == "function" then
+                local ok, val = pcall(store.getExperience)
+                if ok and val ~= nil and tonumber(val) then
+                    exp = tonumber(val)
+                end
+            end
+            if exp == nil and type(store.getState) == "function" then
+                local ok, state = pcall(store.getState)
+                if ok and type(state) == "table" and state.experience ~= nil and tonumber(state.experience) then
+                    exp = tonumber(state.experience)
+                end
+            end
+        end
+    end
+
+    -- 3. Check PlayerController (LegacyInterface Controller: getExperience())
     if exp == nil then
         local ctrl = getPlayerController()
         if ctrl and type(ctrl.getExperience) == "function" then
@@ -1222,7 +1234,7 @@ function CombinedData:GetPlayerExp()
         end
     end
 
-    -- 3. Check Cache ("Values.Experience" or parent Values table)
+    -- 4. Check Cache ("Values.Experience" or parent Values table)
     if exp == nil then
         local statExp = getStat("Values.Experience")
         if statExp ~= nil and tonumber(statExp) then
@@ -1239,20 +1251,6 @@ function CombinedData:GetPlayerExp()
                         end
                     end
                 end)
-            end
-        end
-    end
-
-    -- 4. Fallback: LocalPlayer ValueBase (LocalPlayer:FindFirstChild("Experience") or "Exp")
-    if exp == nil then
-        local lp = getLocalPlayer()
-        if lp then
-            local val = lp:FindFirstChild("Experience") or lp:FindFirstChild("Exp")
-            if val and val:IsA("ValueBase") then
-                local v = val.Value
-                if v ~= nil then
-                    exp = tonumber(v) or parseNumber(v)
-                end
             end
         end
     end
@@ -1304,9 +1302,9 @@ function CombinedData:GetPlayerExp()
     end
 
     if exp and exp >= 0 then
-        lastKnownExp = exp
-    elseif lastKnownExp and lastKnownExp >= 0 then
-        exp = lastKnownExp
+        statsEnv.Exp = exp
+    elseif statsEnv.Exp and statsEnv.Exp >= 0 then
+        exp = statsEnv.Exp
     else
         exp = 0
     end
@@ -1857,17 +1855,17 @@ function CombinedData:IsChapter0Beaten()
        and self:IsBruteForceBeaten()
 
     if beaten then
-        lastKnownChapter0Beaten = true
+        statsEnv.Chapter0Beaten = true
         return true
     end
 
-    if lastKnownChapter0Beaten then
+    if statsEnv.Chapter0Beaten then
         return true
     end
 
     -- If player already owns Assassin, Chapter 0 / Boot Camp is guaranteed completed
     if self:IsTowerOwned("Assassin") then
-        lastKnownChapter0Beaten = true
+        statsEnv.Chapter0Beaten = true
         return true
     end
 
