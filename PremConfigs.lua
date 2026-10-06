@@ -13,7 +13,7 @@ local Config = {
             [1] = {
                 Level = 0, -- Level required: 0 or above
                 TowersCheck = { "Scout", "Sniper" },
-                TowersToEquip = { "Scout", "Sniper" },
+                TowersToEquip = { },
                 TowerToBuy = { "Assassin" },
                 StoryMode = { "Boot Camp", "Live Fire", "Breach Protocol", "Brute Force" }, -- Story Missions
                 scripts = {
@@ -56,6 +56,24 @@ local Config = {
                 Modes = "Molten", -- Match difficulty / mode
                 TowerToBuy = { "Farm", "Boomerang" },
                 TowersToClaim = { "Crook Boss" },
+                Maps = { "Lighthaos", "Midnight Issue", "Nether", "Wrecked Battlefield II" }, -- Available Maps
+                scripts = {
+                    ["Lighthaos"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node2/lighthaos.lua",
+                    ["Midnight Issue"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node2/midnight_issue.lua",
+                    ["Nether"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node2/nether.lua",
+                    ["Wrecked Battlefield II"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node2/wrecked_battlefield_ii.lua",
+                }
+            }
+        },
+        ["Node 3"] = {
+            TowerToBuy = { "Brawler", "Necromancer", "Accelerator", "Engineer", "Hacker" }, -- Node 3 goal
+            [1] = {
+                Level = 50, -- Level required: 50 or above
+                TowersCheck = { "Boomerang", "Farm", "Crook Boss" },
+                TowersToEquip = { "Boomerang", "Farm", "Crook Boss" },
+                Modes = "hardcore", -- Match difficulty / mode
+                Difficulty = "Easy",
+                TowerToBuy = { "Brawler", "Necromancer", "Accelerator", "Engineer", "Hacker" }, 
                 Maps = { "Lighthaos", "Midnight Issue", "Nether", "Wrecked Battlefield II" }, -- Available Maps
                 scripts = {
                     ["Lighthaos"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node2/lighthaos.lua",
