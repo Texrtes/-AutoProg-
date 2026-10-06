@@ -67,8 +67,10 @@ local Config = {
         },
         ["Node 3"] = {
             TowerToBuy = { "Brawler", "Necromancer", "Accelerator", "Engineer", "Hacker" }, -- Node 3 goal
+			  LevelGoals = 5000, -- Level target for Node 2
             [1] = {
                 Level = 50, -- Level required: 50 or above
+				 LevelGoals = 5000,
                 TowersCheck = { "Pyromancer", "Hunter" },
                 TowersToEquip = { "Pyromancer", "Hunter" },
                 Modes = "hardcore", -- Match difficulty / mode
