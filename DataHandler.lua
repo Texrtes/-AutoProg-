@@ -126,6 +126,21 @@ local function getCache()
     return Cache
 end
 
+local function getExperience()
+    if not Experience then
+        pcall(function()
+            local sm = ReplicatedStorage:FindFirstChild("Shared")
+            local mod = sm and sm:FindFirstChild("Modules") and sm.Modules:FindFirstChild("Experience")
+            if mod then
+                Experience = require(mod)
+            elseif ReplicatedStorage:FindFirstChild("Shared") then
+                Experience = require(ReplicatedStorage.Shared.Modules.Experience)
+            end
+        end)
+    end
+    return Experience
+end
+
 local function getInventoryController()
     if not InventoryController then
         pcall(function()
@@ -1111,9 +1126,10 @@ function CombinedData:GetGems()
 end
 
 --- Calculates Required XP and Remaining XP for a given level and current XP.
--- Player XP requirements scale by 25 XP per level and cap at 1,150 XP:
---   RequiredXP = min(1150, (L + 1) * 25)
---   RemainingXP = max(0, RequiredXP - XP)
+-- Player XP requirements match the official TDS Experience curve:
+--   Base: 10 + 35 * (1 + targetLevel / 10)
+--   Level > 10: -80 + 80 * (1 + targetLevel / 10)
+--   Level > 40: 245 + 15 * (1 + targetLevel / 10)
 -- @param level number? Optional player level (defaults to current player level)
 -- @param exp number? Optional player EXP (defaults to current player EXP)
 -- @return number requiredExp, number remainingExp
@@ -1126,19 +1142,32 @@ function CombinedData:CalculatePlayerExp(level, exp)
         exp = tonumber(exp) or 0
     end
 
-    local requiredExp = math.min(1150, (level + 1) * 25)
-    if Experience then
-        local ok, nExp = pcall(Experience, level + 1)
+    local expFn = getExperience()
+    local requiredExp = nil
+    if expFn then
+        local ok, nExp = pcall(expFn, level + 1)
         if ok and type(nExp) == "number" and nExp > 0 then
             requiredExp = nExp
         end
+    end
+
+    -- Exact TDS formula fallback if module is unloaded in match
+    if not requiredExp then
+        local targetLvl = level + 1
+        local v1 = 10 + 35 * (1 + targetLvl / 10)
+        if targetLvl > 40 then
+            v1 = 245 + 15 * (1 + targetLvl / 10)
+        elseif targetLvl > 10 then
+            v1 = -80 + 80 * (1 + targetLvl / 10)
+        end
+        requiredExp = math.floor(v1 + 0.5)
     end
 
     local remainingExp = math.max(0, requiredExp - exp)
     return requiredExp, remainingExp
 end
 
---- Returns the required XP for next level: min(1150, (L + 1) * 25)
+--- Returns the required XP for next level
 -- @param level number? Optional player level (defaults to current player level)
 -- @return number requiredExp
 function CombinedData:GetRequiredExp(level)
@@ -1158,7 +1187,7 @@ end
 --- Returns current player EXP, required EXP for next level, formatted string, and remaining EXP
 -- Return values:
 --   1. exp (number)          - Current player XP
---   2. requiredExp (number)  - XP required for (level + 1), capped at 1,150
+--   2. requiredExp (number)  - XP required for (level + 1)
 --   3. expDisplay (string)   - Formatted string "exp / requiredExp"
 --   4. remainingExp (number) - XP remaining to reach next level
 function CombinedData:GetPlayerExp()
@@ -1198,6 +1227,19 @@ function CombinedData:GetPlayerExp()
         local statExp = getStat("Values.Experience")
         if statExp ~= nil and tonumber(statExp) then
             exp = tonumber(statExp)
+        else
+            local curCache = getCache()
+            if curCache then
+                pcall(function()
+                    local vAtom = curCache("Values")
+                    if vAtom and type(vAtom.GetValue) == "function" then
+                        local vTable = vAtom:GetValue()
+                        if vTable and vTable.Experience ~= nil and tonumber(vTable.Experience) then
+                            exp = tonumber(vTable.Experience)
+                        end
+                    end
+                end)
+            end
         end
     end
 
@@ -1215,7 +1257,42 @@ function CombinedData:GetPlayerExp()
         end
     end
 
-    -- 5. Fallback: Lobby HUD TextLabel (LevelBar currentExp label: e.g. "400 Exp")
+    -- 5. Fallback: LocalPlayer leaderstats
+    if exp == nil then
+        local lp = getLocalPlayer()
+        local ls = lp and lp:FindFirstChild("leaderstats")
+        if ls then
+            local val = ls:FindFirstChild("Experience") or ls:FindFirstChild("Exp")
+            if val and val:IsA("ValueBase") then
+                local v = val.Value
+                if v ~= nil then
+                    exp = tonumber(v) or parseNumber(v)
+                end
+            end
+        end
+    end
+
+    -- 6. Fallback: StateReplicators PlayerReplicator attribute
+    if exp == nil then
+        pcall(function()
+            local reps = ReplicatedStorage:FindFirstChild("StateReplicators")
+            if reps then
+                local lp = getLocalPlayer()
+                local myId = lp and lp.UserId
+                for _, r in ipairs(reps:GetChildren()) do
+                    if r.Name == "PlayerReplicator" and (not myId or r:GetAttribute("UserId") == myId) then
+                        local attrExp = r:GetAttribute("Experience")
+                        if attrExp and tonumber(attrExp) then
+                            exp = tonumber(attrExp)
+                            break
+                        end
+                    end
+                end
+            end
+        end)
+    end
+
+    -- 7. Fallback: Lobby HUD TextLabel (LevelBar currentExp label: e.g. "400 Exp")
     if exp == nil then
         local pgui = getPlayerGui(2)
         if pgui then
@@ -1226,14 +1303,32 @@ function CombinedData:GetPlayerExp()
         end
     end
 
-    exp = exp or 0
+    if exp and exp >= 0 then
+        lastKnownExp = exp
+    elseif lastKnownExp and lastKnownExp >= 0 then
+        exp = lastKnownExp
+    else
+        exp = 0
+    end
 
-    local requiredExp = math.min(1150, (level + 1) * 25)
-    if Experience then
-        local ok, nExp = pcall(Experience, level + 1)
+    local expFn = getExperience()
+    local requiredExp = nil
+    if expFn then
+        local ok, nExp = pcall(expFn, level + 1)
         if ok and type(nExp) == "number" and nExp > 0 then
             requiredExp = nExp
         end
+    end
+
+    if not requiredExp then
+        local targetLvl = level + 1
+        local v1 = 10 + 35 * (1 + targetLvl / 10)
+        if targetLvl > 40 then
+            v1 = 245 + 15 * (1 + targetLvl / 10)
+        elseif targetLvl > 10 then
+            v1 = -80 + 80 * (1 + targetLvl / 10)
+        end
+        requiredExp = math.floor(v1 + 0.5)
     end
 
     local remainingExp = math.max(0, requiredExp - exp)
