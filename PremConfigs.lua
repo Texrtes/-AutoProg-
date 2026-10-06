@@ -69,17 +69,14 @@ local Config = {
             TowerToBuy = { "Brawler", "Necromancer", "Accelerator", "Engineer", "Hacker" }, -- Node 3 goal
             [1] = {
                 Level = 50, -- Level required: 50 or above
-                TowersCheck = { "Boomerang", "Farm", "Crook Boss" },
-                TowersToEquip = { "Boomerang", "Farm", "Crook Boss" },
+                TowersCheck = { "Pyromancer", "Hunter" },
+                TowersToEquip = { "Pyromancer", "Hunter" },
                 Modes = "hardcore", -- Match difficulty / mode
                 Difficulty = "Easy",
                 TowerToBuy = { "Brawler", "Necromancer", "Accelerator", "Engineer", "Hacker" }, 
-                Maps = { "Lighthaos", "Midnight Issue", "Nether", "Wrecked Battlefield II" }, -- Available Maps
+                Maps = { "Wretched Front" }, -- Available Maps
                 scripts = {
-                    ["Lighthaos"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node2/lighthaos.lua",
-                    ["Midnight Issue"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node2/midnight_issue.lua",
-                    ["Nether"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node2/nether.lua",
-                    ["Wrecked Battlefield II"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Nodes/Node2/wrecked_battlefield_ii.lua",
+                    ["Wretched Front"] = "https://raw.githubusercontent.com/Texrtes/-AutoProg-/main/Recording/Node3/wretched_front.lua",
                 }
             }
         }
@@ -247,10 +244,11 @@ local Config = {
 -- Alias for convenience
 Config.SkillTreePrioUpgrade = Config.SkillTreePrioUpgrad
 
--- Support numeric index indexing: Nodes[0] == Nodes["Node 0"], Nodes[1] == Nodes["Node 1"], Nodes[2] == Nodes["Node 2"]
+-- Support numeric index indexing: Nodes[0] == Nodes["Node 0"], Nodes[1] == Nodes["Node 1"], Nodes[2] == Nodes["Node 2"], Nodes[3] == Nodes["Node 3"]
 Config.Nodes[0] = Config.Nodes["Node 0"]
 Config.Nodes[1] = Config.Nodes["Node 1"]
 Config.Nodes[2] = Config.Nodes["Node 2"]
+Config.Nodes[3] = Config.Nodes["Node 3"]
 
 -- Alias for Claim towers lookup
 Config.TowerList["Claim"] = Config.TowerList["Levels"]
